@@ -1,96 +1,168 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Star, MapPin, Clock, Stethoscope, Scissors, ShoppingBag, Map, Navigation, Loader2 } from 'lucide-react';
-
-const mockBusinesses = [
-    { id: 1, name: 'VetCentral 24 Horas', type: 'veterinaria', distance: '1.2 km', rating: 4.8, address: 'Av. Amazonas, Quito', image: 'https://images.unsplash.com/photo-1584132967334-10e028bd69f7?auto=format&fit=crop&q=80&w=600' },
-    { id: 2, name: 'Cortes Perrunos & Spa', type: 'peluqueria', distance: '3.5 km', rating: 4.5, address: 'Av. De los Shyris, Quito', image: 'https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?auto=format&fit=crop&q=80&w=600' },
-    { id: 3, name: 'Mundo Mascota Store', type: 'tienda', distance: '0.8 km', rating: 4.9, address: 'CC El Recreo', image: 'https://images.unsplash.com/photo-1535930891776-0c2dfb7fda1a?auto=format&fit=crop&q=80&w=600' }
-];
+import { useState, useEffect } from 'react';
+import { Store, MapPin, Phone, Clock, ShieldCheck, HeartPulse } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function Market() {
-    const [filter, setFilter] = useState('todos');
-    const [locationState, setLocationState] = useState<'idle' | 'loading' | 'found'>('idle');
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
-    const filtered = filter === 'todos' ? mockBusinesses : mockBusinesses.filter(b => b.type === filter);
+    const [businesses, setBusinesses] = useState<any[]>([]);
+    const [filter, setFilter] = useState('TODOS');
 
-    const handleGetLocation = () => {
-        setLocationState('loading');
-        // Le pedimos permiso al navegador
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                () => {
-                    setTimeout(() => setLocationState('found'), 1500); // Simulamos la búsqueda
-                },
-                () => { alert("Por favor permite el acceso a tu ubicación."); setLocationState('idle'); }
-            );
+    // Estados para el Modal de Agendar
+    const [selectedBiz, setSelectedBiz] = useState<any>(null);
+    const [myPets, setMyPets] = useState<any[]>([]);
+    const [appointmentData, setAppointmentData] = useState({ petId: '', date: '', time: '', reason: '' });
+
+    useEffect(() => {
+        fetchBusinesses();
+        // Cargar mis mascotas para el selector del modal
+        if (currentUser.id) {
+            fetch(`http://localhost:3001/api/pets/${currentUser.id}`)
+                .then(res => res.json())
+                .then(data => setMyPets(data));
+        }
+    }, [currentUser.id]);
+
+    const fetchBusinesses = async () => {
+        try {
+            const response = await fetch('http://localhost:3001/api/business');
+            const data = await response.json();
+            setBusinesses(data);
+        } catch (error) {
+            console.error("Error al cargar marketplace:", error);
         }
     };
 
+    const handleAgendar = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const pet = myPets.find(p => p.id === appointmentData.petId);
+
+        await fetch('http://localhost:3001/api/appointments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ...appointmentData,
+                petName: pet.name,
+                ownerId: currentUser.id,
+                businessId: selectedBiz.ownerId
+            })
+        });
+        alert('¡Cita agendada con éxito! La clínica ha sido notificada.');
+        setSelectedBiz(null);
+    };
+
+    const filteredBusinesses = filter === 'TODOS'
+        ? businesses
+        : businesses.filter(b => b.type === filter);
+
     return (
-        <div className="min-h-screen bg-slate-50/50 p-6 md:p-10">
-            <div className="max-w-6xl mx-auto">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <div>
-                        <h1 className="text-3xl font-extrabold text-slate-800">Marketplace</h1>
-                        <p className="text-slate-500 mt-1">Encuentra veterinarias y tiendas cerca de ti.</p>
-                    </div>
-
-                    <button
-                        onClick={handleGetLocation}
-                        disabled={locationState === 'loading'}
-                        className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all"
-                    >
-                        {locationState === 'idle' && <><Navigation size={18} /> Usar mi ubicación GPS</>}
-                        {locationState === 'loading' && <><Loader2 size={18} className="animate-spin" /> Buscando cerca...</>}
-                        {locationState === 'found' && <><MapPin size={18} className="text-emerald-400" /> Ubicación Activa</>}
-                    </button>
+        <div className="min-h-screen bg-slate-50 p-6 md:p-10">
+            <div className="max-w-7xl mx-auto">
+                <div className="text-center mb-10">
+                    <h1 className="text-4xl font-extrabold text-slate-800 flex items-center justify-center gap-3 mb-4">
+                        <Store className="text-teal-600" size={40} />
+                        Marketplace PetPocket
+                    </h1>
+                    <p className="text-slate-500 text-lg">Encuentra veterinarias, peluquerías y tiendas reales cerca de ti.</p>
                 </div>
 
-                {/* Simulación del MAPA si ya encontró la ubicación */}
-                <AnimatePresence>
-                    {locationState === 'found' && (
-                        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-8">
-                            <div className="bg-slate-200 h-48 rounded-3xl border-2 border-slate-300 relative overflow-hidden flex items-center justify-center bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
-                                <div className="absolute inset-0 bg-teal-900/10 backdrop-blur-[1px]"></div>
-                                <div className="z-10 flex flex-col items-center">
-                                    <MapPin size={40} className="text-rose-500 mb-2 drop-shadow-lg" />
-                                    <span className="bg-white px-4 py-2 rounded-full text-sm font-bold shadow-md">Estás en Quito, sector Centro Norte</span>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Filtros */}
-                <div className="flex gap-3 mb-8 overflow-x-auto pb-2">
-                    <button onClick={() => setFilter('todos')} className={`px-5 py-2 rounded-xl font-bold text-sm transition-all ${filter === 'todos' ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200'}`}>Todos</button>
-                    <button onClick={() => setFilter('veterinaria')} className={`px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${filter === 'veterinaria' ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200'}`}><Stethoscope size={16} /> Vets</button>
-                    <button onClick={() => setFilter('tienda')} className={`px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${filter === 'tienda' ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200'}`}><ShoppingBag size={16} /> Tiendas</button>
+                <div className="flex flex-wrap justify-center gap-3 mb-12">
+                    {['TODOS', 'VETERINARIA', 'PELUQUERIA', 'TIENDA'].map((type) => (
+                        <button
+                            key={type}
+                            onClick={() => setFilter(type)}
+                            className={`px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-sm ${filter === type ? 'bg-teal-600 text-white shadow-teal-200' : 'bg-white text-slate-600 hover:bg-teal-50 border border-slate-200'}`}
+                        >
+                            {type === 'TODOS' ? 'Todos los negocios' : type}
+                        </button>
+                    ))}
                 </div>
 
-                {/* Tarjetas con indicador de Distancia */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filtered.map(biz => (
-                        <motion.div key={biz.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="h-40 overflow-hidden relative">
-                                <img src={biz.image} alt={biz.name} className="w-full h-full object-cover" />
-                                {locationState === 'found' && (
-                                    <span className="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur-sm text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1">
-                                        <Navigation size={12} /> A {biz.distance} de ti
-                                    </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+                    {filteredBusinesses.map((biz) => (
+                        <motion.div key={biz.id} whileHover={{ y: -5 }} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                            <div className="h-48 relative bg-slate-100">
+                                {biz.imageUrl ? (
+                                    <img src={biz.imageUrl} alt={biz.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-slate-300"><Store size={64} /></div>
                                 )}
+                                <span className="absolute top-4 right-4 bg-white/90 backdrop-blur text-teal-800 text-xs font-extrabold px-3 py-1.5 rounded-full shadow-sm">
+                                    {biz.type}
+                                </span>
                             </div>
-                            <div className="p-5">
-                                <div className="flex justify-between items-start mb-2">
-                                    <h3 className="text-lg font-bold text-slate-800">{biz.name}</h3>
-                                    <span className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg text-xs font-extrabold"><Star size={12} className="fill-current" /> {biz.rating}</span>
+
+                            <div className="p-6 flex-1 flex flex-col">
+                                <h3 className="text-2xl font-bold text-slate-800 mb-2">{biz.name}</h3>
+                                <p className="text-slate-600 text-sm mb-4 line-clamp-2">{biz.description}</p>
+
+                                <div className="space-y-2 mb-6">
+                                    <p className="flex items-center gap-2 text-sm text-slate-500"><MapPin size={16} className="text-teal-600" /> {biz.address}</p>
+                                    <p className="flex items-center gap-2 text-sm text-slate-500"><Phone size={16} className="text-teal-600" /> {biz.phone}</p>
+                                    {biz.is24_7 && (
+                                        <p className="flex items-center gap-2 text-sm text-rose-600 font-bold"><Clock size={16} /> Atención 24/7</p>
+                                    )}
                                 </div>
-                                <p className="flex items-center gap-2 text-slate-500 text-sm"><MapPin size={14} className="text-teal-600" /> {biz.address}</p>
+
+                                <div className="mt-auto">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Servicios / Productos</p>
+                                    <div className="flex flex-wrap gap-2 mb-6">
+                                        {biz.services?.split(',').map((service: string, idx: number) => (
+                                            <span key={idx} className="bg-teal-50 text-teal-700 text-xs px-2.5 py-1 rounded-lg border border-teal-100">{service.trim()}</span>
+                                        ))}
+                                    </div>
+
+                                    <button onClick={() => setSelectedBiz(biz)} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
+                                        <HeartPulse size={18} /> {biz.type === 'TIENDA' ? 'Hacer Pedido' : 'Agendar Cita'}
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     ))}
+
+                    {filteredBusinesses.length === 0 && (
+                        <div className="col-span-full text-center py-20">
+                            <ShieldCheck size={48} className="text-slate-300 mx-auto mb-4" />
+                            <p className="text-slate-500 text-lg">Aún no hay negocios registrados en esta categoría.</p>
+                        </div>
+                    )}
                 </div>
+
+                {/* MODAL AGENDAR CITA */}
+                {selectedBiz && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                        <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl">
+                            <h3 className="text-2xl font-bold mb-4">Agendar en {selectedBiz.name}</h3>
+                            <form onSubmit={handleAgendar} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-semibold mb-1">¿Para qué mascota es?</label>
+                                    <select required onChange={e => setAppointmentData({ ...appointmentData, petId: e.target.value })} className="w-full border rounded-xl p-2.5">
+                                        <option value="">Selecciona tu mascota...</option>
+                                        {myPets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1">Fecha</label>
+                                        <input type="date" required onChange={e => setAppointmentData({ ...appointmentData, date: e.target.value })} className="w-full border rounded-xl p-2.5" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1">Hora</label>
+                                        <input type="time" required onChange={e => setAppointmentData({ ...appointmentData, time: e.target.value })} className="w-full border rounded-xl p-2.5" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-1">Motivo / Servicio</label>
+                                    <input type="text" required onChange={e => setAppointmentData({ ...appointmentData, reason: e.target.value })} className="w-full border rounded-xl p-2.5" placeholder="Ej. Vacuna, Baño..." />
+                                </div>
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <button type="button" onClick={() => setSelectedBiz(null)} className="px-4 py-2 text-slate-500 font-bold">Cancelar</button>
+                                    <button type="submit" className="bg-teal-600 text-white px-6 py-2 rounded-xl font-bold">Confirmar</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

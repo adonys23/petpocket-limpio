@@ -11,11 +11,12 @@ function AppContent() {
   const navigate = useNavigate();
   const isLogin = location.pathname === '/';
 
-  // Leemos qué rol tiene el usuario en esta sesión
-  const userRole = localStorage.getItem('userRole') || '';
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const userRole = user?.role || '';
 
   const handleLogout = () => {
-    localStorage.clear(); // Borramos la memoria al salir
+    localStorage.clear();
     navigate('/');
   };
 
@@ -30,17 +31,21 @@ function AppContent() {
                 <span className="text-2xl font-extrabold tracking-tight">PetPocket</span>
               </div>
               <div className="hidden md:flex space-x-6 items-center">
-                {/* Menú Inteligente: Se adapta al Rol */}
-                {userRole === 'CLIENTE' && (
-                  <Link to="/mascotas" className="text-slate-600 hover:text-teal-600 font-semibold flex items-center gap-1.5 transition-colors"><Home size={18} /> Mis Mascotas</Link>
+
+                {/* VISTA SOLO PARA DUEÑOS */}
+                {userRole === 'DUEÑO' && (
+                  <>
+                    <Link to="/mascotas" className="text-slate-600 hover:text-teal-600 font-semibold flex items-center gap-1.5 transition-colors"><Home size={18} /> Mis Mascotas</Link>
+                    <Link to="/market" className="text-slate-600 hover:text-teal-600 font-semibold flex items-center gap-1.5 transition-colors"><Store size={18} /> Marketplace</Link>
+                  </>
                 )}
 
-                <Link to="/market" className="text-slate-600 hover:text-teal-600 font-semibold flex items-center gap-1.5 transition-colors"><Store size={18} /> Marketplace</Link>
-
-                {userRole === 'NEGOCIO' && (
-                  <Link to="/negocio-panel" className="text-slate-600 hover:text-teal-600 font-semibold flex items-center gap-1.5 transition-colors"><Store size={18} /> Panel Mi Negocio</Link>
+                {/* VISTA SOLO PARA NEGOCIOS */}
+                {['VETERINARIA', 'PELUQUERIA', 'TIENDA'].includes(userRole) && (
+                  <Link to="/negocio-panel" className="text-slate-600 hover:text-teal-600 font-semibold flex items-center gap-1.5 transition-colors"><Store size={18} /> Mi Dashboard</Link>
                 )}
 
+                {/* VISTA ADMIN */}
                 {userRole === 'ADMIN' && (
                   <Link to="/admin" className="text-slate-600 hover:text-emerald-600 font-semibold flex items-center gap-1.5 transition-colors"><ShieldCheck size={18} /> Admin</Link>
                 )}

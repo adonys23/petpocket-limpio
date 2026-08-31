@@ -1,116 +1,165 @@
-import { Calendar, Users, DollarSign, Clock, CheckCircle, Package, ShoppingBag, Truck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Store, Phone, MapPin, Clock, Info, CheckCircle } from 'lucide-react';
 
 export default function BusinessDashboard() {
-    const businessType = localStorage.getItem('businessType') || 'VETERINARIA';
-    const isShop = businessType === 'TIENDA';
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
-    // Datos falsos para Vet/Spa
-    const appointments = [
-        { id: 1, time: '09:00', pet: 'Luna', type: 'Gato', owner: 'Carlos M.', reason: isShop ? '-' : 'Control mensual' },
-        { id: 2, time: '14:30', pet: 'Max', type: 'Perro', owner: 'Adonys C.', reason: isShop ? '-' : 'Vacunación Anual' }
-    ];
+    const [activeTab, setActiveTab] = useState('PERFIL');
+    const [appointments, setAppointments] = useState<any[]>([]);
 
-    // Datos falsos para Tienda
-    const orders = [
-        { id: 101, item: 'Saco Royal Canin 15kg', client: 'Ana G.', total: '$65.00', status: 'Por entregar' },
-        { id: 102, item: 'Juguete Kong + Correa', client: 'Luis P.', total: '$22.50', status: 'Enviado' }
-    ];
+    const [saved, setSaved] = useState(false);
+    const [formData, setFormData] = useState({
+        ownerId: currentUser.id,
+        name: currentUser.name || '',
+        type: currentUser.role,
+        description: '',
+        address: '',
+        phone: '',
+        is24_7: false,
+        services: '',
+        imageUrl: ''
+    });
+
+    useEffect(() => {
+        if (activeTab === 'CITAS') {
+            fetch(`http://localhost:3001/api/appointments/business/${currentUser.id}`)
+                .then(res => res.json())
+                .then(data => setAppointments(data));
+        }
+    }, [activeTab, currentUser.id]);
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => setFormData({ ...formData, imageUrl: reader.result as string });
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            const response = await fetch('http://localhost:3001/api/business', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            if (response.ok) {
+                setSaved(true);
+                setTimeout(() => setSaved(false), 3000);
+            }
+        } catch (error) {
+            console.error("Error al guardar perfil de negocio:", error);
+        }
+    };
+
+    const handleFinalize = async (appt: any) => {
+        const action = prompt(`¿Qué servicio/tratamiento se le realizó a ${appt.petName}? (Esto irá a su carnet digital)`);
+        if (!action) return;
+
+        await fetch(`http://localhost:3001/api/appointments/${appt.id}/finalize`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ petId: appt.petId, action, vetName: currentUser.name })
+        });
+
+        alert("¡Carnet digital actualizado y cita finalizada!");
+        setActiveTab('PERFIL');
+        setTimeout(() => setActiveTab('CITAS'), 100);
+    };
 
     return (
         <div className="min-h-screen bg-slate-50/50 p-6 md:p-10">
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-4xl mx-auto">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-extrabold text-slate-800">
-                        {isShop ? 'Panel de Tienda de Mascotas' : 'Panel Clínico y Agenda'}
+                    <h1 className="text-3xl font-extrabold text-slate-800 flex items-center gap-3">
+                        <Store className="text-teal-600" size={32} />
+                        Panel de Mi Negocio
                     </h1>
-                    <p className="text-slate-500 mt-1">
-                        {isShop ? 'Gestiona tu inventario y pedidos del día.' : 'Gestiona tu agenda y revisa el historial de pacientes.'}
-                    </p>
+                    <p className="text-slate-500 mt-1">Configura tu perfil y gestiona tus citas médicas.</p>
                 </div>
 
-                {/* Métricas cambian según el tipo */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-sm font-bold text-slate-400 uppercase">{isShop ? 'Pedidos Hoy' : 'Pacientes Hoy'}</span>
-                            <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl">{isShop ? <ShoppingBag size={22} /> : <Users size={22} />}</div>
-                        </div>
-                        <h2 className="text-3xl font-extrabold text-slate-800">{isShop ? '12 Pedidos' : '8 Citas'}</h2>
-                    </div>
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-sm font-bold text-slate-400 uppercase">Ingresos Estimados</span>
-                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><DollarSign size={22} /></div>
-                        </div>
-                        <h2 className="text-3xl font-extrabold text-slate-800">{isShop ? '$245.00' : '$450.00'}</h2>
-                    </div>
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-sm font-bold text-slate-400 uppercase">{isShop ? 'Stock Bajo' : 'Pendientes'}</span>
-                            <div className="p-3 bg-rose-50 text-rose-600 rounded-2xl">{isShop ? <Package size={22} /> : <Clock size={22} />}</div>
-                        </div>
-                        <h2 className="text-3xl font-extrabold text-slate-800">{isShop ? '3 Prod.' : '2 Turnos'}</h2>
-                    </div>
+                {/* PESTAÑAS */}
+                <div className="flex gap-4 mb-8 border-b border-slate-200 pb-4">
+                    <button onClick={() => setActiveTab('PERFIL')} className={`px-6 py-2 rounded-lg font-bold transition-all ${activeTab === 'PERFIL' ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Mi Perfil Público</button>
+                    <button onClick={() => setActiveTab('CITAS')} className={`px-6 py-2 rounded-lg font-bold transition-all ${activeTab === 'CITAS' ? 'bg-teal-600 text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>Agenda y Pacientes</button>
                 </div>
 
-                {/* Tabla dinámica */}
-                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="p-6 border-b border-slate-100 bg-slate-50">
-                        <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                            {isShop ? <><Package size={20} className="text-teal-600" /> Pedidos Recientes</> : <><Calendar size={20} className="text-teal-600" /> Agenda de Hoy</>}
-                        </h3>
-                    </div>
+                {/* FORMULARIO DE PERFIL */}
+                {activeTab === 'PERFIL' && (
+                    <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-slate-600 mb-1">Nombre del Negocio</label>
+                            <input type="text" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-teal-600" />
+                        </div>
 
-                    <div className="overflow-x-auto">
-                        {isShop ? (
-                            // VISTA DE TIENDA
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
-                                        <th className="p-4 font-semibold">ID Pedido</th>
-                                        <th className="p-4 font-semibold">Producto</th>
-                                        <th className="p-4 font-semibold">Cliente</th>
-                                        <th className="p-4 font-semibold">Total</th>
-                                        <th className="p-4 font-semibold">Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {orders.map(order => (
-                                        <tr key={order.id} className="hover:bg-slate-50">
-                                            <td className="p-4 font-bold text-slate-700">#{order.id}</td>
-                                            <td className="p-4 font-medium text-slate-800">{order.item}</td>
-                                            <td className="p-4 text-sm text-slate-600">{order.client}</td>
-                                            <td className="p-4 font-bold text-emerald-600">{order.total}</td>
-                                            <td className="p-4"><span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 flex items-center gap-1 w-max"><Truck size={12} /> {order.status}</span></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        ) : (
-                            // VISTA DE VET/SPA
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
-                                        <th className="p-4 font-semibold">Hora</th>
-                                        <th className="p-4 font-semibold">Paciente</th>
-                                        <th className="p-4 font-semibold">Motivo</th>
-                                        <th className="p-4 font-semibold">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {appointments.map(app => (
-                                        <tr key={app.id} className="hover:bg-slate-50">
-                                            <td className="p-4 font-bold text-slate-700">{app.time}</td>
-                                            <td className="p-4 font-medium text-slate-800">{app.pet} <span className="text-xs text-slate-500 block">{app.type}</span></td>
-                                            <td className="p-4 text-sm text-slate-600">{app.reason}</td>
-                                            <td className="p-4"><button className="bg-teal-50 text-teal-700 hover:bg-teal-100 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1"><CheckCircle size={14} /> Finalizar</button></td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-slate-600 mb-1 flex items-center gap-2"><Info size={16} /> Descripción corta</label>
+                            <textarea required value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-teal-600" rows={3} placeholder="¿Qué hace especial a tu negocio?"></textarea>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-600 mb-1 flex items-center gap-2"><MapPin size={16} /> Dirección</label>
+                            <input type="text" required value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-teal-600" placeholder="Ej. Av. Principal 123" />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-600 mb-1 flex items-center gap-2"><Phone size={16} /> Teléfono de contacto</label>
+                            <input type="text" required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-teal-600" />
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-semibold text-slate-600 mb-1">Servicios o Productos (separados por coma)</label>
+                            <input type="text" required value={formData.services} onChange={e => setFormData({ ...formData, services: e.target.value })} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-teal-600" placeholder="Ej. Consultas, Vacunas, Cirugías" />
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <input type="checkbox" id="is247" checked={formData.is24_7} onChange={e => setFormData({ ...formData, is24_7: e.target.checked })} className="w-5 h-5 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
+                            <label htmlFor="is247" className="text-sm font-semibold text-slate-600 flex items-center gap-2"><Clock size={16} className="text-teal-600" /> ¿Atienden 24/7?</label>
+                        </div>
+
+                        <div className="md:col-span-2 border-t border-slate-100 pt-6 mt-2">
+                            <label className="block text-sm font-semibold text-slate-600 mb-1">Foto principal del negocio</label>
+                            <input type="file" accept="image/*" onChange={handleImageChange} className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100" />
+                        </div>
+
+                        <div className="md:col-span-2 flex justify-end mt-4 gap-4 items-center">
+                            {saved && <span className="text-emerald-600 font-bold flex items-center gap-2"><CheckCircle size={20} /> ¡Guardado!</span>}
+                            <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white font-bold px-8 py-3 rounded-xl shadow-lg transition-all">
+                                Guardar Perfil
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {/* VISTA DE CITAS */}
+                {activeTab === 'CITAS' && (
+                    <div className="space-y-4">
+                        {appointments.map(appt => (
+                            <div key={appt.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+                                <div>
+                                    <h3 className="font-bold text-lg text-slate-800">Paciente: {appt.petName}</h3>
+                                    <p className="text-sm text-slate-500 flex gap-4 mt-1">
+                                        <span>📅 {appt.date}</span>
+                                        <span>⏰ {appt.time}</span>
+                                    </p>
+                                    <p className="text-teal-700 font-semibold mt-2">Motivo: {appt.reason}</p>
+                                </div>
+                                <div>
+                                    {appt.status === 'PENDIENTE' ? (
+                                        <button onClick={() => handleFinalize(appt)} className="bg-slate-800 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-slate-900 shadow-md">
+                                            Finalizar y Actualizar Carnet
+                                        </button>
+                                    ) : (
+                                        <span className="text-emerald-600 font-bold bg-emerald-50 px-4 py-2 rounded-xl">Completada</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {appointments.length === 0 && <p className="text-slate-500 text-center py-10 bg-white rounded-3xl border border-slate-100">No tienes citas agendadas aún.</p>}
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

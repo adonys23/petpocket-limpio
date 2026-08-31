@@ -8,11 +8,52 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model Pet {
+model User {
   id        String   @id @default(uuid())
   name      String
-  type      String   
-  age       String
-  imageUrl  String?  
+  email     String   @unique
+  password  String
+  role      String   @default("DUEÑO")
   createdAt DateTime @default(now())
+}
+
+model Pet {
+  id        String   @id @default(uuid())
+  ownerId   String   // ¡NUEVO! Conecta la mascota con el dueño
+  name      String
+  type      String   
+  breed     String?
+  age       String
+  allergies String?
+  imageUrl  String?  
+  history   Json?    @default("[]") // ¡NUEVO! Para que funcione el Carnet Digital
+  createdAt DateTime @default(now())
+}
+
+// ¡NUEVO! Tabla para los negocios del Marketplace
+model Business {
+  id          String   @id @default(uuid())
+  ownerId     String   @unique // El ID del usuario que creó el negocio
+  name        String
+  type        String   // VETERINARIA, PELUQUERIA o TIENDA
+  description String?
+  address     String?
+  phone       String?
+  is24_7      Boolean  @default(false)
+  services    String?  // Aquí guardamos "Vacunas", "Baño", o "Croquetas"
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+}
+
+model Appointment {
+  id          String   @id @default(uuid())
+  petId       String
+  petName     String
+  ownerId     String
+  businessId  String   // A qué veterinaria/peluquería va
+  date        String
+  time        String
+  reason      String
+  status      String   @default("PENDIENTE") 
+  createdAt   DateTime @default(now())
 }
