@@ -127,7 +127,17 @@ export default function LoginPage() {
                         </div>
 
                         <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-6">
-                            {isLogin ? <><LogIn size={20} /> Entrar a mi cuenta</> : <><UserPlus size={20} /> Registrarme ahora</>}
+                            {isLogin ? (
+                                <span key="login-btn" className="flex items-center gap-2">
+                                    <LogIn size={20} />
+                                    <span>Entrar a mi cuenta</span>
+                                </span>
+                            ) : (
+                                <span key="register-btn" className="flex items-center gap-2">
+                                    <UserPlus size={20} />
+                                    <span>Registrarme ahora</span>
+                                </span>
+                            )}
                         </button>
                     </form>
                 </div>

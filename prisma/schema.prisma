@@ -42,6 +42,8 @@ model Business {
   is24_7      Boolean  @default(false)
   services    String?  // Aquí guardamos "Vacunas", "Baño", o "Croquetas"
   imageUrl    String?
+  latitude    Float?
+  longitude   Float?
   // ¡NUEVO! Horario de atención, para calcular citas disponibles.
   workDays    String[] @default([]) // Ej. ["LUN","MAR","MIE","JUE","VIE"]
   openTime    String?  // Ej. "09:00"

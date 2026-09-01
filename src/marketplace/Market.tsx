@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Store, MapPin, Phone, Clock, ShieldCheck, HeartPulse } from 'lucide-react';
+import { Store, MapPin, Phone, Clock, ShieldCheck, HeartPulse, Navigation } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../components/ToastProvider';
 
@@ -20,8 +20,11 @@ export default function Market() {
     const [slotsClosed, setSlotsClosed] = useState(false);
     const [loadingSlots, setLoadingSlots] = useState(false);
 
+    const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [loadingLocation, setLoadingLocation] = useState(false);
+
     useEffect(() => {
-        fetchBusinesses();
+        fetchBusinessesWithLocation();
         fetchMyPets();
     }, [currentUser.id]);
 
@@ -42,7 +45,39 @@ export default function Market() {
             .finally(() => setLoadingSlots(false));
     }, [selectedBiz, appointmentData.date]);
 
-    const fetchBusinesses = async () => {
+    const fetchBusinessesWithLocation = async () => {
+        if ('geolocation' in navigator) {
+            setLoadingLocation(true);
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    setUserLocation({ lat: latitude, lng: longitude });
+                    try {
+                        const response = await fetch(`http://localhost:3001/api/businesses/nearby?latitude=${latitude}&longitude=${longitude}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            setBusinesses(data);
+                            setLoadingLocation(false);
+                            return;
+                        }
+                    } catch (err) {
+                        console.error("Error cargando negocios cercanos:", err);
+                    }
+                    fetchDefaultBusinesses();
+                },
+                (error) => {
+                    console.warn("Permiso de ubicación no otorgado, cargando sin ordenar por distancia:", error.message);
+                    fetchDefaultBusinesses();
+                },
+                { timeout: 8000 }
+            );
+        } else {
+            fetchDefaultBusinesses();
+        }
+    };
+
+    const fetchDefaultBusinesses = async () => {
+        setLoadingLocation(false);
         try {
             const response = await fetch('http://localhost:3001/api/business');
             const data = await response.json();
@@ -158,7 +193,14 @@ export default function Market() {
                                 </div>
 
                                 <div className="p-6 flex-1 flex flex-col">
-                                    <h3 className="text-2xl font-bold text-slate-800 mb-2">{biz.name}</h3>
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                        <h3 className="text-2xl font-bold text-slate-800">{biz.name}</h3>
+                                        {biz.distanceInKm !== undefined && (
+                                            <span className="flex items-center gap-1 text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-100 whitespace-nowrap">
+                                                <Navigation size={12} className="fill-teal-700" /> {biz.distanceInKm} km
+                                            </span>
+                                        )}
+                                    </div>
                                     {biz.description ? (
                                         <p className="text-slate-600 text-sm mb-4 line-clamp-2">{biz.description}</p>
                                     ) : (

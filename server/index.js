@@ -67,9 +67,11 @@ app.delete('/api/pets/:id', async (req, res) => {
 
 // --- 3. NEGOCIOS PARA EL MARKETPLACE ---
 app.post('/api/business', async (req, res) => {
-    const { ownerId, name, type, description, address, phone, is24_7, services, imageUrl, workDays, openTime, closeTime, slotMinutes } = req.body;
+    const { ownerId, name, type, description, address, phone, is24_7, services, imageUrl, workDays, openTime, closeTime, slotMinutes, latitude, longitude } = req.body;
     const data = {
         name, type, description, address, phone, is24_7, services, imageUrl,
+        latitude: (latitude !== undefined && latitude !== null && latitude !== '') ? Number(latitude) : null,
+        longitude: (longitude !== undefined && longitude !== null && longitude !== '') ? Number(longitude) : null,
         workDays: workDays || [],
         openTime: openTime || null,
         closeTime: closeTime || null,
@@ -86,6 +88,58 @@ app.post('/api/business', async (req, res) => {
 app.get('/api/business', async (req, res) => {
     const businesses = await prisma.business.findMany();
     res.json(businesses);
+});
+
+// Función auxiliar para calcular la distancia entre dos coordenadas (Fórmula de Haversine)
+function getDistanceInKm(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radio de la Tierra en km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// Endpoint para buscar clínicas/negocios cercanos dentro de un radio en km
+app.get('/api/businesses/nearby', async (req, res) => {
+    const { latitude, longitude, radius } = req.query;
+
+    if (!latitude || !longitude) {
+        return res.status(400).json({ error: "Se requieren los parámetros 'latitude' y 'longitude'" });
+    }
+
+    const userLat = parseFloat(String(latitude));
+    const userLon = parseFloat(String(longitude));
+    const radiusKm = radius ? parseFloat(String(radius)) : 10;
+
+    if (isNaN(userLat) || isNaN(userLon)) {
+        return res.status(400).json({ error: "'latitude' y 'longitude' deben ser números válidos" });
+    }
+
+    try {
+        const businesses = await prisma.business.findMany({
+            where: {
+                latitude: { not: null },
+                longitude: { not: null }
+            }
+        });
+
+        const nearby = businesses
+            .map(biz => {
+                const distance = getDistanceInKm(userLat, userLon, biz.latitude, biz.longitude);
+                return { ...biz, distanceInKm: Math.round(distance * 100) / 100 };
+            })
+            .filter(biz => biz.distanceInKm <= radiusKm)
+            .sort((a, b) => a.distanceInKm - b.distanceInKm);
+
+        res.json(nearby);
+    } catch (error) {
+        console.error("Error al buscar negocios cercanos:", error);
+        res.status(500).json({ error: "Error al buscar negocios cercanos" });
+    }
 });
 
 // Calcula los horarios libres de un negocio para una fecha dada, según su

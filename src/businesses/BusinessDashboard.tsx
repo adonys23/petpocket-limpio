@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Store, Phone, MapPin, Clock, Info, CheckCircle, CalendarDays, PawPrint, ClipboardList, ImagePlus, Loader2, LogOut, ChevronDown } from 'lucide-react';
+import { Store, Phone, MapPin, Clock, Info, CheckCircle, CalendarDays, PawPrint, ClipboardList, ImagePlus, Loader2, LogOut, ChevronDown, Navigation } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,6 +27,9 @@ export default function BusinessDashboard() {
     const [saved, setSaved] = useState(false);
     const [finalizingAppt, setFinalizingAppt] = useState<any>(null);
     const [finalizeNote, setFinalizeNote] = useState('');
+    const [gettingLocation, setGettingLocation] = useState(false);
+    const [locationStatus, setLocationStatus] = useState('');
+
     const [formData, setFormData] = useState({
         ownerId: currentUser.id,
         name: currentUser.name || '',
@@ -37,11 +40,43 @@ export default function BusinessDashboard() {
         is24_7: false,
         services: '',
         imageUrl: '',
+        latitude: null as number | null,
+        longitude: null as number | null,
         workDays: [] as string[],
         openTime: '09:00',
         closeTime: '18:00',
         slotMinutes: 30
     });
+
+    const handleGetLocation = () => {
+        if (!('geolocation' in navigator)) {
+            showToast('Tu navegador no soporta geolocalización', 'error');
+            return;
+        }
+        setGettingLocation(true);
+        setLocationStatus('');
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                const latFormatted = Number(latitude.toFixed(6));
+                const lngFormatted = Number(longitude.toFixed(6));
+                setFormData(prev => ({
+                    ...prev,
+                    latitude: latFormatted,
+                    longitude: lngFormatted
+                }));
+                setGettingLocation(false);
+                setLocationStatus('Ubicación capturada ✓');
+                showToast('Ubicación capturada con éxito', 'success');
+            },
+            (error) => {
+                setGettingLocation(false);
+                setLocationStatus('');
+                showToast('No se pudo obtener la ubicación: ' + error.message, 'error');
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    };
 
     const toggleDay = (day: string) => {
         setFormData(prev => ({
@@ -58,9 +93,6 @@ export default function BusinessDashboard() {
         }
     }, [activeTab, currentUser.id]);
 
-    // Precargar el perfil ya guardado (si existe) para que el formulario no
-    // aparezca vacío cada vez que entras, y así no se te borre por accidente
-    // lo que ya habías llenado antes al volver a darle "Guardar Perfil".
     useEffect(() => {
         if (!currentUser.id) { setProfileLoaded(true); return; }
         fetch('http://localhost:3001/api/business')
@@ -78,13 +110,16 @@ export default function BusinessDashboard() {
                         is24_7: Boolean(mine.is24_7),
                         services: mine.services || '',
                         imageUrl: mine.imageUrl || '',
+                        latitude: mine.latitude ?? null,
+                        longitude: mine.longitude ?? null,
                         workDays: mine.workDays || [],
                         openTime: mine.openTime || '09:00',
                         closeTime: mine.closeTime || '18:00',
                         slotMinutes: mine.slotMinutes || 30
                     });
-                    // Ya tiene un perfil creado: arrancamos en la Agenda (dashboard),
-                    // no en el formulario de edición, para que no sea lo primero que vea.
+                    if (mine.latitude && mine.longitude) {
+                        setLocationStatus('Ubicación previa guardada ✓');
+                    }
                     setActiveTab('CITAS');
                 }
             })
@@ -111,7 +146,10 @@ export default function BusinessDashboard() {
             });
             if (response.ok) {
                 setSaved(true);
-                setTimeout(() => setSaved(false), 3000);
+                setTimeout(() => {
+                    setSaved(false);
+                    setActiveTab('CITAS');
+                }, 1500);
             }
         } catch (error) {
             console.error("Error al guardar perfil de negocio:", error);
@@ -247,6 +285,27 @@ export default function BusinessDashboard() {
                         <div>
                             <label className="block text-sm font-semibold text-slate-600 mb-1 flex items-center gap-2"><MapPin size={16} /> Dirección</label>
                             <input type="text" required value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-teal-600" placeholder="Ej. Av. Principal 123" />
+                            <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={handleGetLocation}
+                                    disabled={gettingLocation}
+                                    className="text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                    {gettingLocation ? <Loader2 size={13} className="animate-spin" /> : <Navigation size={13} />}
+                                    📍 Usar mi ubicación actual
+                                </button>
+                                {locationStatus && (
+                                    <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                                        {locationStatus}
+                                    </span>
+                                )}
+                                {formData.latitude && formData.longitude && !locationStatus && (
+                                    <span className="text-xs text-slate-400">
+                                        ({formData.latitude}, {formData.longitude})
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
                         <div>
