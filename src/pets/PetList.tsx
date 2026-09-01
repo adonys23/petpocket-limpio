@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, AlertTriangle, Calendar, ShieldCheck, X, FileText, Syringe, Trash2, Upload } from 'lucide-react';
+import { Plus, AlertTriangle, Calendar, ShieldCheck, X, FileText, Syringe, Trash2, Upload, Clock, Stethoscope } from 'lucide-react';
+import { useToast } from '../components/ToastProvider';
 
 export default function PetList() {
     const [pets, setPets] = useState<any[]>([]);
     const [showForm, setShowForm] = useState(false);
     const [selectedCarnet, setSelectedCarnet] = useState<any | null>(null);
+    const [deletingPet, setDeletingPet] = useState<any | null>(null);
+    const showToast = useToast();
+    const [appointments, setAppointments] = useState<any[]>([]);
 
     const [newName, setNewName] = useState('');
     const [newType, setNewType] = useState('Perro');
@@ -20,8 +24,35 @@ export default function PetList() {
     useEffect(() => {
         if (currentUser.id) {
             fetchPets();
+            fetchAppointments();
         }
     }, [currentUser.id]);
+
+    const fetchAppointments = async () => {
+        try {
+            const response = await fetch(`http://localhost:3001/api/appointments/owner/${currentUser.id}`);
+            const data = await response.json();
+            setAppointments(data);
+        } catch (error) {
+            console.error("Error al cargar tus citas:", error);
+        }
+    };
+
+    // Fecha de hoy y de mañana en formato YYYY-MM-DD, igual al que guarda
+    // el <input type="date"> del Marketplace, para poder comparar.
+    // OJO: usamos la fecha LOCAL del navegador (no toISOString, que es UTC)
+    // porque si son ya las 7-8pm en Ecuador, en UTC ya es el día siguiente,
+    // y eso hacía que una cita de "mañana" saliera marcada como "hoy".
+    const toDateKey = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+    const todayKey = toDateKey(new Date());
+    const tomorrowKey = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+    const upcomingAppointments = appointments.filter(a => a.status === 'PENDIENTE');
 
     const fetchPets = async () => {
         try {
@@ -69,15 +100,19 @@ export default function PetList() {
         }
     };
 
-    const handleDeletePet = async (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!confirm("¿Estás seguro de eliminar esta mascota?")) return;
+    const confirmDeletePet = async () => {
+        if (!deletingPet) return;
+        const id = deletingPet.id;
         try {
             await fetch(`http://localhost:3001/api/pets/${id}`, { method: 'DELETE' });
             setPets(pets.filter(p => p.id !== id));
             if (selectedCarnet?.id === id) setSelectedCarnet(null);
+            showToast(`${deletingPet.name} fue eliminado.`, 'info');
         } catch (error) {
             console.error("Error al eliminar:", error);
+            showToast('No se pudo eliminar la mascota, intenta de nuevo.', 'error');
+        } finally {
+            setDeletingPet(null);
         }
     };
 
@@ -93,6 +128,46 @@ export default function PetList() {
                         <Plus size={20} /> {showForm ? 'Cerrar' : 'Nueva Mascota'}
                     </button>
                 </div>
+
+                {/* MIS PRÓXIMAS CITAS: se ve apenas entras, con aviso si es hoy o mañana */}
+                {upcomingAppointments.length > 0 && (
+                    <div className="mb-8">
+                        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Mis Próximas Citas</h2>
+                        <div className="space-y-3">
+                            {upcomingAppointments.map(appt => {
+                                const isToday = appt.date === todayKey;
+                                const isTomorrow = appt.date === tomorrowKey;
+                                return (
+                                    <div
+                                        key={appt.id}
+                                        className={`relative bg-white p-4 pl-6 rounded-2xl shadow-sm border overflow-hidden flex flex-wrap items-center justify-between gap-3 ${
+                                            isToday ? 'border-rose-200' : isTomorrow ? 'border-amber-200' : 'border-slate-200'
+                                        }`}
+                                    >
+                                        <span className={`absolute left-0 top-0 h-full w-1.5 ${isToday ? 'bg-rose-400' : isTomorrow ? 'bg-amber-400' : 'bg-teal-300'}`} />
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+                                                <Stethoscope size={18} />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-sm">{appt.petName} · {appt.businessName}</p>
+                                                <p className="text-xs text-slate-500 flex items-center gap-3 mt-0.5">
+                                                    <span className="flex items-center gap-1"><Calendar size={12} /> {appt.date}</span>
+                                                    <span className="flex items-center gap-1"><Clock size={12} /> {appt.time}</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {(isToday || isTomorrow) && (
+                                            <span className={`text-xs font-extrabold px-3 py-1.5 rounded-full ${isToday ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
+                                                {isToday ? '¡Es hoy!' : 'Es mañana'}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* FORMULARIO */}
                 <AnimatePresence>
@@ -138,7 +213,7 @@ export default function PetList() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {pets.map((pet) => (
                         <motion.div key={pet.id} whileHover={{ y: -5 }} className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden transition-all relative">
-                            <button onClick={(e) => handleDeletePet(pet.id, e)} className="absolute top-3 left-3 bg-rose-500/90 hover:bg-rose-600 text-white p-2 rounded-full shadow-md z-10 transition-colors">
+                            <button onClick={(e) => { e.stopPropagation(); setDeletingPet(pet); }} className="absolute top-3 left-3 bg-rose-500/90 hover:bg-rose-600 text-white p-2 rounded-full shadow-md z-10 transition-colors">
                                 <Trash2 size={16} />
                             </button>
                             <div className="h-48 relative">
@@ -198,6 +273,29 @@ export default function PetList() {
                                             ))
                                         )}
                                     </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* MODAL CONFIRMAR ELIMINAR (reemplaza el confirm() feo del navegador) */}
+                <AnimatePresence>
+                    {deletingPet && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl">
+                                <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mb-4">
+                                    <AlertTriangle size={24} />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800 mb-1">¿Eliminar a {deletingPet.name}?</h3>
+                                <p className="text-sm text-slate-500 mb-6">Se borrará su perfil y su carnet digital. Esta acción no se puede deshacer.</p>
+                                <div className="flex justify-end gap-3">
+                                    <button type="button" onClick={() => setDeletingPet(null)} className="px-4 py-2 text-slate-500 font-bold">
+                                        Cancelar
+                                    </button>
+                                    <button type="button" onClick={confirmDeletePet} className="bg-rose-500 hover:bg-rose-600 text-white px-5 py-2 rounded-xl font-bold flex items-center gap-2">
+                                        <Trash2 size={16} /> Eliminar
+                                    </button>
                                 </div>
                             </motion.div>
                         </div>

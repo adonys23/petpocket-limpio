@@ -5,6 +5,7 @@ import PetDashboard from './pets/PetList';
 import Market from './marketplace/Market';
 import BusinessDashboard from './businesses/BusinessDashboard';
 import AdminDashboard from './admin/Dashboard';
+import { ToastProvider } from './components/ToastProvider';
 
 function AppContent() {
   const location = useLocation();
@@ -74,8 +75,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppContent />
-    </BrowserRouter>
+    <ToastProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </ToastProvider>
   );
 }

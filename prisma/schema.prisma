@@ -42,6 +42,11 @@ model Business {
   is24_7      Boolean  @default(false)
   services    String?  // Aquí guardamos "Vacunas", "Baño", o "Croquetas"
   imageUrl    String?
+  // ¡NUEVO! Horario de atención, para calcular citas disponibles.
+  workDays    String[] @default([]) // Ej. ["LUN","MAR","MIE","JUE","VIE"]
+  openTime    String?  // Ej. "09:00"
+  closeTime   String?  // Ej. "18:00"
+  slotMinutes Int      @default(30) // duración de cada cita
   createdAt   DateTime @default(now())
 }
 
@@ -56,4 +61,7 @@ model Appointment {
   reason      String
   status      String   @default("PENDIENTE") 
   createdAt   DateTime @default(now())
+
+  // Evita que dos citas se agenden en el mismo negocio, mismo día y misma hora.
+  @@unique([businessId, date, time])
 }

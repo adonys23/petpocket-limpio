@@ -67,11 +67,18 @@ app.delete('/api/pets/:id', async (req, res) => {
 
 // --- 3. NEGOCIOS PARA EL MARKETPLACE ---
 app.post('/api/business', async (req, res) => {
-    const { ownerId, name, type, description, address, phone, is24_7, services, imageUrl } = req.body;
+    const { ownerId, name, type, description, address, phone, is24_7, services, imageUrl, workDays, openTime, closeTime, slotMinutes } = req.body;
+    const data = {
+        name, type, description, address, phone, is24_7, services, imageUrl,
+        workDays: workDays || [],
+        openTime: openTime || null,
+        closeTime: closeTime || null,
+        slotMinutes: slotMinutes || 30
+    };
     const business = await prisma.business.upsert({
         where: { ownerId },
-        update: { name, type, description, address, phone, is24_7, services, imageUrl },
-        create: { ownerId, name, type, description, address, phone, is24_7, services, imageUrl }
+        update: data,
+        create: { ownerId, ...data }
     });
     res.json(business);
 });
@@ -81,13 +88,73 @@ app.get('/api/business', async (req, res) => {
     res.json(businesses);
 });
 
+// Calcula los horarios libres de un negocio para una fecha dada, según su
+// horario configurado (workDays/openTime/closeTime/slotMinutes) y las citas
+// que ya existan ese día.
+app.get('/api/appointments/available', async (req, res) => {
+    const { businessId, date } = req.query;
+    if (!businessId || !date) {
+        return res.status(400).json({ error: "Faltan businessId o date" });
+    }
+    try {
+        const business = await prisma.business.findUnique({ where: { ownerId: String(businessId) } });
+        if (!business) return res.status(404).json({ error: "Negocio no encontrado" });
+
+        const DAYS = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
+        const dayAbbr = DAYS[new Date(`${date}T00:00:00Z`).getUTCDay()];
+
+        const isOpenToday = business.is24_7 || (business.workDays || []).includes(dayAbbr);
+        if (!isOpenToday) {
+            return res.json({ closed: true, slots: [] });
+        }
+
+        const openTime = business.is24_7 ? '00:00' : (business.openTime || '09:00');
+        const closeTime = business.is24_7 ? '23:59' : (business.closeTime || '18:00');
+        const slotMinutes = business.slotMinutes || 30;
+
+        const [openH, openM] = openTime.split(':').map(Number);
+        const [closeH, closeM] = closeTime.split(':').map(Number);
+        let cursor = openH * 60 + openM;
+        const end = closeH * 60 + closeM;
+
+        const allSlots = [];
+        while (cursor + slotMinutes <= end) {
+            const h = String(Math.floor(cursor / 60)).padStart(2, '0');
+            const m = String(cursor % 60).padStart(2, '0');
+            allSlots.push(`${h}:${m}`);
+            cursor += slotMinutes;
+        }
+
+        const taken = await prisma.appointment.findMany({
+            where: { businessId: String(businessId), date: String(date) },
+            select: { time: true }
+        });
+        const takenSet = new Set(taken.map(t => t.time));
+
+        res.json({ closed: false, slots: allSlots.filter(s => !takenSet.has(s)) });
+    } catch (error) {
+        console.error("Error al calcular horarios disponibles:", error);
+        res.status(500).json({ error: "Error al calcular horarios disponibles" });
+    }
+});
+
 // --- 4. RUTAS DE CITAS Y CARNET DIGITAL ---
 app.post('/api/appointments', async (req, res) => {
     const { petId, petName, ownerId, businessId, date, time, reason } = req.body;
-    const newAppt = await prisma.appointment.create({
-        data: { petId, petName, ownerId, businessId, date, time, reason }
-    });
-    res.json(newAppt);
+    try {
+        const newAppt = await prisma.appointment.create({
+            data: { petId, petName, ownerId, businessId, date, time, reason }
+        });
+        res.json(newAppt);
+    } catch (error) {
+        // P2002 = choque con la restricción @@unique([businessId, date, time]):
+        // alguien más ya agendó justo ese horario un instante antes.
+        if (error.code === 'P2002') {
+            return res.status(409).json({ error: "Ese horario ya fue reservado por alguien más. Elige otro." });
+        }
+        console.error("Error al crear cita:", error);
+        res.status(500).json({ error: "Error al agendar la cita" });
+    }
 });
 
 app.get('/api/appointments/business/:businessId', async (req, res) => {
@@ -97,6 +164,27 @@ app.get('/api/appointments/business/:businessId', async (req, res) => {
         orderBy: { createdAt: 'desc' }
     });
     res.json(appts);
+});
+
+// Citas vistas desde el lado del dueño de mascota (para el apartado
+// "Mis Próximas Citas" que se ve al iniciar sesión en /mascotas).
+app.get('/api/appointments/owner/:ownerId', async (req, res) => {
+    const { ownerId } = req.params;
+    try {
+        const appts = await prisma.appointment.findMany({
+            where: { ownerId },
+            orderBy: { date: 'asc' }
+        });
+        const businesses = await prisma.business.findMany();
+        const withBusinessName = appts.map(appt => {
+            // businessId guarda el ownerId del negocio, no el id de Business.
+            const biz = businesses.find(b => b.ownerId === appt.businessId);
+            return { ...appt, businessName: biz ? biz.name : 'Negocio' };
+        });
+        res.json(withBusinessName);
+    } catch (error) {
+        res.status(500).json({ error: "Error al cargar tus citas" });
+    }
 });
 
 app.put('/api/appointments/:id/finalize', async (req, res) => {
